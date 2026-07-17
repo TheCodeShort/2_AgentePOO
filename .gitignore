@@ -1,0 +1,15 @@
+# Entornos virtuales (ignora la carpeta completa)
+.venv/
+venv/
+env/
+
+# Configuraciones de editores de código
+.idea/
+/.idea
+.vscode/
+
+# Archivos de configuración con contraseñas
+.env
+*.local
+*__pycache__/
+*venv*/

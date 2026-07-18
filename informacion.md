@@ -26,4 +26,7 @@ deactivate
 python -m pip install pypdf  
 python -m pip install langchain langchain-text-splitters
 python -m pip install google-genai langchain langchain-text-splitters
+python -m pip install python-dotenv 
+
+
 

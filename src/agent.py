@@ -1,114 +1,23 @@
-import os
-import re
 import sys
-import unicodedata
-from pathlib import Path
 
 from google import genai
 from google.genai import types
 
-# from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# Cargamos los chunks ya preparados desde splitter.py
-try:
-    from splitter import preparar_chunks_desde_pdf
-except ImportError:
-    print("❌ Error: No se encontró 'splitter.py' en la carpeta src.")
-    sys.exit(1)
+from config import (
+    MODEL_NAME,
+    MAX_OUTPUT_TOKENS,
+    TEMPERATURE,
+    obtener_api_key,
+)
 
-
-def normalizar_texto(texto: str) -> str:
-    """
-    Convierte el texto a una forma más fácil de comparar:
-    - minúsculas
-    - sin tildes
-    - sin signos raros
-    """
-    texto = unicodedata.normalize("NFKD", texto)
-    texto = texto.encode("ascii", "ignore").decode("ascii")
-    texto = texto.lower()
-    texto = re.sub(r"[^a-z0-9\s]", " ", texto)
-    texto = re.sub(r"\s+", " ", texto).strip()
-
-    return texto
-
-
-def buscar_chunks_relevantes(pregunta: str, chunks: list[str], cantidad: int = 4) -> list[str]:
-    """
-    Busca los fragmentos más relevantes usando coincidencia por palabras clave.
-    Esto ayuda a no mandar todo el PDF al modelo y ahorrar tokens.
-    """
-    stopwords = {
-        "que", "cual", "cuales", "como", "cuando", "donde", "porque", "para", "por",
-        "del", "de", "la", "el", "los", "las", "una", "uno", "unos", "unas",
-        "sobre", "este", "esta", "estas", "estos", "eso", "esa", "ese", "hay",
-        "ser", "estar", "tiene", "tener", "puede", "puedo", "puedes", "hacer",
-        "hace", "hacen", "mas", "menos"
-    }
-
-    pregunta_norm = normalizar_texto(pregunta)
-    palabras = [
-        palabra
-        for palabra in pregunta_norm.split()
-        if len(palabra) > 3 and palabra not in stopwords
-    ]
-
-    chunks_con_puntaje = []
-
-    for chunk in chunks:
-        chunk_norm = normalizar_texto(chunk)
-        puntaje = sum(1 for palabra in palabras if palabra in chunk_norm)
-
-        if puntaje > 0:
-            chunks_con_puntaje.append((puntaje, chunk))
-
-    # Ordenar por relevancia descendente
-    chunks_con_puntaje.sort(key=lambda x: x[0], reverse=True)
-
-    resultados = [chunk for _, chunk in chunks_con_puntaje[:cantidad]]
-
-    # Si no encontró nada, usamos los primeros fragmentos como respaldo
-    if not resultados:
-        resultados = chunks[:cantidad]
-
-    return resultados
-
-
-# -----------------------------
-# 2) CONFIGURACIÓN DE API KEY
-# -----------------------------
-def obtener_api_key() -> str | None:
-    """
-    Intenta obtener GEMINI_API_KEY primero desde el sistema.
-    Si no existe, intenta cargarla desde .env.
-    Esto sirve tanto para PC local como para OCI.
-    """
-    api_key = os.environ.get("GEMINI_API_KEY")
-
-    if not api_key:
-        try:
-            from dotenv import load_dotenv
-            load_dotenv()
-            api_key = os.environ.get("GEMINI_API_KEY")
-        except ImportError:
-            pass
-
-    return api_key
-
-
-# -----------------------------
-# 3) AGENTE INTERACTIVO
-# -----------------------------
-def iniciar_agente_interactivo(todos_los_chunks: list[str]) -> None:
-    """
-    Bucle de chat interactivo.
-    Usa Gemini con contexto reducido para responder sobre el PDF.
-    """
+def iniciar_agente_interactivo(retriever) -> None:
+    """Bucle de chat que usa un retriever semántico para armar contexto."""
     api_key_gemini = obtener_api_key()
 
     if not api_key_gemini:
         print("\n❌ ERROR DE CONFIGURACIÓN:")
-        print("No se detectó la variable GEMINI_API_KEY.")
+        print("No se detectó la variable GEMINI_API_KEY / GOOGLE_API_KEY.")
         print("- En tu PC: revisa tu archivo .env")
         print('- En OCI: define la variable en el entorno con export GEMINI_API_KEY="tu_llave"')
         return
@@ -118,18 +27,18 @@ def iniciar_agente_interactivo(todos_los_chunks: list[str]) -> None:
     system_instruction = (
         "Eres un asistente académico experto en el documento proporcionado. "
         "Responde solo con información respaldada por el contexto. "
-        "Si la respuesta no aparece en el texto, dilo claramente. "
+        "Si la respuesta no está en el texto, dilo claramente. "
         "Sé claro, breve y preciso."
     )
 
     config = types.GenerateContentConfig(
         system_instruction=system_instruction,
-        max_output_tokens=900,
-        temperature=0.2,
+        max_output_tokens=MAX_OUTPUT_TOKENS,
+        temperature=TEMPERATURE,
     )
 
     chat = client.chats.create(
-        model="gemini-2.5-flash",
+        model=MODEL_NAME,
         config=config
     )
 
@@ -151,19 +60,22 @@ def iniciar_agente_interactivo(todos_los_chunks: list[str]) -> None:
 
             print("⏳ Buscando contexto relevante en el PDF...")
 
-            chunks_contexto = buscar_chunks_relevantes(
-                pregunta_usuario,
-                todos_los_chunks,
-                cantidad=4
+            documentos_relevantes = retriever.invoke(pregunta_usuario)
+            contexto_formateado = "\n---\n".join(
+                doc.page_content for doc in documentos_relevantes
             )
 
-            contexto_formateado = "\n---\n".join(chunks_contexto)
+            if not contexto_formateado.strip():
+                print("\n🤖 Agente:")
+                print("No encuentro esa información en el documento.")
+                print("-" * 56 + "\n")
+                continue
 
             prompt_final = (
                 "Usa SOLO el contexto siguiente si realmente sirve para responder.\n\n"
                 f"CONTEXTO DEL DOCUMENTO:\n{contexto_formateado}\n\n"
                 f"PREGUNTA DEL USUARIO:\n{pregunta_usuario}\n\n"
-                "Si la respuesta no está en el contexto, responde: "
+                "Si la respuesta no está en el contexto, responde exactamente: "
                 "'No encuentro esa información en el documento.'"
             )
 
@@ -177,26 +89,3 @@ def iniciar_agente_interactivo(todos_los_chunks: list[str]) -> None:
 
         except Exception as error:
             print(f"\n❌ Ocurrió un inconveniente durante el chat: {error}\n")
-
-
-# -----------------------------
-# 4) BLOQUE PRINCIPAL
-# -----------------------------
-if __name__ == "__main__":
-    ruta_pdf = str(Path(__file__).resolve().parent.parent / "data" / "0_todo_poo.pdf")
-
-    print("⚙️ Paso 1: Preparando chunks desde el PDF...")
-
-    try:
-        chunks_libro = preparar_chunks_desde_pdf(
-            ruta_pdf=ruta_pdf,
-            chunk_size=800,
-            chunk_overlap=80
-        )
-    except Exception as error:
-        print(f"❌ Error preparando el documento: {error}")
-        sys.exit(1)
-
-    print(f"✅ Documento preparado con éxito. Total de chunks: {len(chunks_libro)}")
-
-    iniciar_agente_interactivo(chunks_libro)

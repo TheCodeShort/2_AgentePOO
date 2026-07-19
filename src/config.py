@@ -1,8 +1,18 @@
 from pathlib import Path
 import os
 
+# Intentamos cargar el archivo .env de forma segura para desarrollo local.
+# Si el archivo no existe o python-dotenv no está instalado, fallará silenciosamente
+# y el sistema leerá directamente del entorno del SO (lo cual ocurre al desplegar en OCI).
+try:
+    from dotenv import load_dotenv
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    load_dotenv(BASE_DIR / ".env")
+except ImportError:
+    pass
+
 # -------------------------------------------------
-# RUTA BASE DEL PROYECTO
+# RUTA BASE DEL PROYECTO (Dinámica para local y OCI)
 # -------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -38,22 +48,17 @@ EMBEDDING_MODEL = "gemini-embedding-2-preview"
 # API KEY: PC LOCAL + OCI
 # -------------------------------------------------
 def obtener_api_key() -> str | None:
+    """
+    Obtiene la API Key buscando directamente en las variables de entorno del sistema operativo
+    (cargadas previamente desde el .env en desarrollo local, o provistas por el entorno en OCI).
+    Sincroniza las claves de entorno para asegurar compatibilidad entre Google GenAI SDK y LangChain.
+    """
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 
     if api_key:
-        os.environ.setdefault("GEMINI_API_KEY", api_key)
-        os.environ.setdefault("GOOGLE_API_KEY", api_key)
+        # Sincronizamos las claves usando asignación directa para sobreescribir posibles llaves viejas
+        os.environ["GEMINI_API_KEY"] = api_key
+        os.environ["GOOGLE_API_KEY"] = api_key
         return api_key
 
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(BASE_DIR / ".env")
-        api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-
-        if api_key:
-            os.environ.setdefault("GEMINI_API_KEY", api_key)
-            os.environ.setdefault("GOOGLE_API_KEY", api_key)
-
-        return api_key
-    except ImportError:
-        return None
+    return None

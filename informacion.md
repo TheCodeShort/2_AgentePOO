@@ -30,5 +30,6 @@ python -m pip install python-dotenv
 ## chroma nos ayudara a convertir todo en enveding y con gemini se traduce 
 python -m pip install langchain-chroma langchain-google-genai
 
-
+## para la wbe
+python -m pip install streamlit
 

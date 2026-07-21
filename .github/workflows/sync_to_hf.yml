@@ -14,9 +14,17 @@ jobs:
           fetch-depth: 0
           lfs: true
 
+      - name: Instalar y Configurar Git LFS
+        run: |
+          git lfs install
+          git lfs track "chroma_db/**"
+          git lfs track "data/**"
+
       - name: Forzar subida a Hugging Face
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
           git remote add hf https://Malkyrick:$HF_TOKEN@huggingface.co/spaces/Malkyrick/ia-gemini-chat
           git push --force hf main

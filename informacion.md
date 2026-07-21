@@ -33,3 +33,4 @@ python -m pip install langchain-chroma langchain-google-genai
 ## para la wbe
 python -m pip install streamlit
 
+

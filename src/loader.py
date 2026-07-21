@@ -78,12 +78,12 @@ def _ruta_pdf() -> str:
     """
     return str(Path(__file__).resolve().parent.parent / "data" / "0_todo_poo.pdf")
 
-if __name__ == "__main__":
-    pdf = _ruta_pdf()
-    #pdf = "../data/0_todo_poo.pdf"
-    texto = cargar_pdf(pdf)
-
-    print("PDF leído correctamente.")
-    print(f"Cantidad de caracteres limpios: {len(texto)}")
-    print("\n--- INICIO DEL TEXTO ---\n")
-    print(texto[:2000])
+# if __name__ == "__main__":
+#     pdf = _ruta_pdf()
+#     #pdf = "../data/0_todo_poo.pdf"
+#     texto = cargar_pdf(pdf)
+#
+#     print("PDF leído correctamente.")
+#     print(f"Cantidad de caracteres limpios: {len(texto)}")
+#     print("\n--- INICIO DEL TEXTO ---\n")
+#     print(texto[:2000])

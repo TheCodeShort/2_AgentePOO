@@ -33,4 +33,6 @@ python -m pip install langchain-chroma langchain-google-genai
 ## para la wbe
 python -m pip install streamlit
 
-
+# cambio importante 
+google-genai==2.10.0 se uso por que con streamlit comunity pone problema 
+antes se usaba google-genai==2.12.1
